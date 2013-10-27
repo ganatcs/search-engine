@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <map>
+#include <queue>
 #include <vector>
 
 class PostingList {
@@ -15,6 +17,10 @@ public:
     int ret = *i_;
     ++i_;
     return ret;
+  }
+  int current() {
+    if (i_ == v_.end()) return -1;
+    return *i_;
   }
   int next(int id) {
     while (i_ != v_.end()) {
@@ -65,7 +71,7 @@ void taat_intersect(PostingList& in,
 }
 
 bool taat(std::vector<PostingList> &posting_lists,
-	  const int top_k,
+	  const size_t top_k,
 	  std::vector<std::pair<int, int>>& result) {
   result.clear();
 
@@ -79,13 +85,83 @@ bool taat(std::vector<PostingList> &posting_lists,
     next_accumlator.swap(result);
   }
 
+  size_t k = std::min(top_k, result.size());
   std::partial_sort(result.begin(),
-		     result.begin() + top_k,
-		     result.end(),
-		     [](const std::pair<int, int>& a, const std::pair<int, int>& b) -> bool{
-		       if (a.second != b.second) return b.second - a.second < 0;
-		       return b.first - a.first > 0;
-		     });
+		    result.begin() + k,
+		    result.end(),
+		    [](const std::pair<int, int>& a, const std::pair<int, int>& b) -> bool {
+		      if (a.second != b.second) return b.second - a.second < 0;
+		      return b.first - a.first > 0;
+		    });
+  return true;
+}
+
+bool daat(std::vector<PostingList> &posting_lists,
+	  const size_t top_k,
+	  std::vector<std::pair<int, int>>& result) {
+  result.clear();
+
+  for (auto posting_list = posting_lists.begin();
+       posting_list != posting_lists.end();
+       ++posting_list) {
+    posting_list->init();
+  }
+
+  auto queue_comp = [](const std::pair<int, int>& a,
+		       const std::pair<int, int>& b) -> bool {
+    if (a.second != b.second) return b.second - a.second < 0;
+    return b.first - a.first > 0;
+  };
+
+  std::priority_queue<std::pair<int, int>,
+                      std::vector<std::pair<int, int>>,
+		      decltype(queue_comp)> que(queue_comp);
+
+  while (true) {
+    size_t end_list = 0;
+    int minv = std::numeric_limits<int>::max();
+    for (auto posting_list = posting_lists.begin();
+	 posting_list != posting_lists.end();
+	 ++posting_list) {
+      int t = posting_list->current();
+      if (t == -1) {
+	end_list++;
+	continue;
+      }
+      minv = std::min(minv, t);
+    }
+    if (end_list == posting_lists.size()) {
+      break;
+    }
+
+    int minv_count = 0;
+    for (auto posting_list = posting_lists.begin();
+	 posting_list != posting_lists.end();
+	 ++posting_list) {
+      int t = posting_list->current();
+      if (t != minv) continue;
+      minv_count++;
+      posting_list->next();
+    }
+
+    if (que.empty() || que.size() < top_k) {
+      que.push(std::make_pair(minv, minv_count));
+      continue;
+    }
+    if (que.top().second > minv_count) {
+      continue;
+    }
+    que.pop();
+    que.push(std::make_pair(minv, minv_count));
+  }
+
+  while(!que.empty()) {
+    std::pair<int, int> t = que.top();
+    que.pop();
+    result.push_back(t);
+  }
+
+  std::reverse(result.begin(), result.end());
   return true;
 }
 
@@ -97,6 +173,13 @@ int main() {
   std::vector<std::pair<int, int>> result;
   taat(ps, 5, result);
 
+  for (auto i = result.begin(); i != result.end(); ++i) {
+    std::cout << i->first << " " << i->second << std::endl;
+  }
+
+  result.clear();
+  daat(ps, 5, result);
+  std::cout << result.size() << std::endl;
   for (auto i = result.begin(); i != result.end(); ++i) {
     std::cout << i->first << " " << i->second << std::endl;
   }
